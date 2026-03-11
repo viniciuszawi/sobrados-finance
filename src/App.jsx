@@ -30,6 +30,7 @@ function App() {
     const [receiptFiles, setReceiptFiles] = useState([])
     const [editingId, setEditingId] = useState(null);
     const [editFormData, setEditFormData] = useState({});
+    const [uploadingId, setUploadingId] = useState(null);
 
     // Modal States
     const [viewReceipt, setViewReceipt] = useState(null);
@@ -273,9 +274,14 @@ function App() {
         const exp = expenses.find(e => e.id === id);
         if (!exp) return;
 
+        setUploadingId(id);
+
         let newReceipts = [];
         for (const file of Array.from(files)) {
-            if (file.size > 10 * 1024 * 1024) continue;
+            if (file.size > 10 * 1024 * 1024) {
+                alert(`A imagem ${file.name} é maior que 10MB e não pôde ser enviada.`);
+                continue;
+            }
             try {
                 const fileExt = file.name.split('.').pop();
                 const fileName = `${uuidv4()}.${fileExt}`;
@@ -285,7 +291,11 @@ function App() {
                     .from('receipts')
                     .upload(filePath, file);
 
-                if (uploadError) continue;
+                if (uploadError) {
+                    console.error("Supabase Storage Error:", uploadError);
+                    alert("Erro ao enviar imagem: " + uploadError.message);
+                    continue;
+                }
 
                 const { data: { publicUrl } } = supabase.storage
                     .from('receipts')
@@ -303,10 +313,28 @@ function App() {
             
             const { error } = await supabase
                 .from('expenses')
-                .update({ receipts: updatedReceipts, receipt: null })
+                .update({ receipts: updatedReceipts })
                 .eq('id', id);
 
-            if (error) console.error("Error updating receipts:", error);
+            if (error) {
+                console.error("Error updating receipts:", error);
+                alert("Erro ao salvar o comprovante no gasto: " + error.message);
+            }
+        }
+        
+        setUploadingId(null);
+    }
+
+    const deleteFilesFromStorage = async (urls) => {
+        if (!urls || urls.length === 0) return;
+        const fileNames = urls.map(url => {
+            try { return url.split('/').pop().split('?')[0]; } 
+            catch { return url; }
+        }).filter(Boolean);
+
+        if (fileNames.length > 0) {
+            const { error } = await supabase.storage.from('receipts').remove(fileNames);
+            if (error) console.error("Error deleting from storage:", error);
         }
     }
 
@@ -318,9 +346,8 @@ function App() {
             const currentReceipts = exp.receipts || (exp.receipt ? [exp.receipt] : []);
             const urlToRemove = currentReceipts[indexToRemove];
             
-            // Try to extract filename from URL if it's a Supabase storage URL to delete the actual file
-            // (Keeping it simple for now and just removing the link from db, leaving orphaned file, 
-            // but normally we'd delete from storage bucket too).
+            // Delete actual file from Supabase Storage Bucket
+            await deleteFilesFromStorage([urlToRemove]);
 
             const newReceipts = currentReceipts.filter((_, idx) => idx !== indexToRemove);
             
@@ -345,6 +372,16 @@ function App() {
 
     const handleDelete = async (id) => {
         if (confirm("Tem certeza que deseja apagar este lançamento?")) {
+            const expToDelete = expenses.find(e => e.id === id);
+
+            // Delete associated files from storage first
+            if (expToDelete) {
+               const allReceipts = expToDelete.receipts || (expToDelete.receipt ? [expToDelete.receipt] : []);
+               if (allReceipts.length > 0) {
+                   await deleteFilesFromStorage(allReceipts);
+               }
+            }
+
             const { error } = await supabase.from('expenses').delete().eq('id', id);
             
             if (error) {
@@ -910,12 +947,17 @@ function App() {
                                                                         accept="image/*,application/pdf"
                                                                         style={{ display: 'none' }}
                                                                         onChange={(e) => handleAttachReceipt(exp.id, e.target.files)}
+                                                                        disabled={uploadingId === exp.id}
                                                                     />
-                                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                                                        <polyline points="17 8 12 3 7 8"></polyline>
-                                                                        <line x1="12" y1="3" x2="12" y2="15"></line>
-                                                                    </svg>
+                                                                    {uploadingId === exp.id ? (
+                                                                        <span style={{ fontSize: '11px', fontWeight: 'bold' }}>...</span>
+                                                                    ) : (
+                                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                                                            <polyline points="17 8 12 3 7 8"></polyline>
+                                                                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                                                                        </svg>
+                                                                    )}
                                                                 </label>
                                                             )}
                                                             {exp.status === 'A Pagar' && (
@@ -1096,11 +1138,13 @@ function App() {
             )}
 
             {/* MULTIPLE RECEIPTS MODAL */}
-            {viewReceipt && (
+            {viewReceipt && (() => {
+                const currentViewReceipt = expenses.find(e => e.id === viewReceipt.id) || viewReceipt;
+                return (
                 <div className="receipt-modal-overlay" onClick={() => setViewReceipt(null)}>
                     <div className="receipt-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
                         <div className="receipt-modal-header">
-                            <h3>Comprovantes ({viewReceipt.receipts?.length || 1})</h3>
+                            <h3>Comprovantes ({currentViewReceipt.receipts?.length || 1})</h3>
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
                                 <label className="btn-success" title="Adicionar mais um" style={{ width: '32px', height: '32px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: '8px' }}>
                                     <input
@@ -1108,18 +1152,17 @@ function App() {
                                         multiple
                                         accept="image/*,application/pdf"
                                         style={{ display: 'none' }}
-                                        onChange={(e) => {
-                                            handleAttachReceipt(viewReceipt.id, e.target.files);
-                                            // Update current view after attach by relying on state cycle
-                                            setTimeout(() => {
-                                                // Force a quick close/open logic would be ideal here if no reliable binding
-                                                // In React, since we mutate expenses, viewReceipt snapshot stays stale until closed
-                                                // Since it's a minor UX bug, closing modal prompts user to open updated one
-                                                setViewReceipt(null);
-                                            }, 500);
+                                        onChange={async (e) => {
+                                            await handleAttachReceipt(currentViewReceipt.id, e.target.files);
+                                            e.target.value = null;
                                         }}
+                                        disabled={uploadingId === currentViewReceipt.id}
                                     />
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                    {uploadingId === currentViewReceipt.id ? (
+                                        <span style={{ fontSize: '11px', fontWeight: 'bold' }}>...</span>
+                                    ) : (
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                    )}
                                 </label>
                                 <button className="btn-close" onClick={() => setViewReceipt(null)}>
                                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -1127,13 +1170,13 @@ function App() {
                             </div>
                         </div>
                         <div className="receipt-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxHeight: '70vh', overflowY: 'auto' }}>
-                            {(viewReceipt.receipts || [viewReceipt.receipt]).map((b64, index) => (
+                            {(currentViewReceipt.receipts || (currentViewReceipt.receipt ? [currentViewReceipt.receipt] : [])).map((urlOrB64, index) => (
                                 <div key={index} style={{ position: 'relative', border: '1px solid var(--border)', borderRadius: '12px', padding: '0.5rem', background: 'var(--background)' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'center', padding: '0 0.5rem' }}>
                                         <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Anexo {index + 1}</span>
                                         <button
                                             className="btn-danger"
-                                            onClick={() => handleDeleteReceipt(viewReceipt.id, index)}
+                                            onClick={() => handleDeleteReceipt(currentViewReceipt.id, index)}
                                             title="Apagar Comprovante"
                                             style={{ width: '28px', height: '28px', padding: 0 }}
                                         >
@@ -1144,17 +1187,18 @@ function App() {
                                         </button>
                                     </div>
 
-                                    {b64.startsWith('data:application/pdf') ? (
-                                        <iframe src={b64} title={`Recibo PDF ${index}`} width="100%" height="300px" style={{ border: 'none', borderRadius: '8px' }}></iframe>
+                                    {(urlOrB64 && (urlOrB64.includes('.pdf') || urlOrB64.startsWith('data:application/pdf'))) ? (
+                                        <iframe src={urlOrB64} title={`Recibo PDF ${index}`} width="100%" height="300px" style={{ border: 'none', borderRadius: '8px' }}></iframe>
                                     ) : (
-                                        <img src={b64} alt={`Recibo ${index}`} style={{ width: '100%', height: 'auto', borderRadius: '8px', display: 'block' }} />
+                                        <img src={urlOrB64} alt={`Recibo ${index}`} style={{ width: '100%', height: 'auto', borderRadius: '8px', display: 'block' }} />
                                     )}
                                 </div>
                             ))}
                         </div>
                     </div>
                 </div>
-            )}
+                );
+            })()}
 
         </div>
     )
