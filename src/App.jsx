@@ -654,6 +654,102 @@ function App() {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const paginatedExpenses = filteredExpenses.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
+    const handleExportTablePDF = () => {
+        const container = document.createElement('div');
+        container.style.padding = '20px';
+        container.style.fontFamily = 'Inter, sans-serif';
+        container.style.color = '#1f2937';
+        
+        const title = document.createElement('h2');
+        title.innerText = 'Relatório Financeiro da Obra';
+        title.style.textAlign = 'center';
+        title.style.marginBottom = '20px';
+        container.appendChild(title);
+        
+        const summaryGrid = document.createElement('div');
+        summaryGrid.style.display = 'flex';
+        summaryGrid.style.justifyContent = 'space-between';
+        summaryGrid.style.marginBottom = '20px';
+        summaryGrid.style.borderBottom = '2px solid #e5e7eb';
+        summaryGrid.style.paddingBottom = '10px';
+        summaryGrid.style.fontSize = '12px';
+        
+        summaryGrid.innerHTML = `
+            <div><strong>Gasto Total:</strong> ${formatCurrency(total)}</div>
+            <div><strong style="color: #60a5fa">Vinícius Pagou:</strong> ${formatCurrency(totalVinicius)}</div>
+            <div><strong style="color: #34d399">Luiz Pagou:</strong> ${formatCurrency(totalLuiz)}</div>
+            <div><strong style="color: #fbbf24">Ambos Pagaram:</strong> ${formatCurrency(totalAmbos)}</div>
+        `;
+        container.appendChild(summaryGrid);
+        
+        const msgDiv = document.createElement('div');
+        msgDiv.innerHTML = `<strong>Situação do Acerto:</strong> ${settlementMsg}`;
+        msgDiv.style.marginBottom = '20px';
+        msgDiv.style.textAlign = 'center';
+        msgDiv.style.fontSize = '14px';
+        container.appendChild(msgDiv);
+        
+        const table = document.createElement('table');
+        table.style.width = '100%';
+        table.style.borderCollapse = 'collapse';
+        table.style.fontSize = '11px';
+        
+        const thead = document.createElement('thead');
+        thead.innerHTML = `
+            <tr style="background-color: #f3f4f6; text-align: left;">
+                <th style="padding: 6px; border: 1px solid #e5e7eb;">Data</th>
+                <th style="padding: 6px; border: 1px solid #e5e7eb;">Descrição</th>
+                <th style="padding: 6px; border: 1px solid #e5e7eb;">Categoria</th>
+                <th style="padding: 6px; border: 1px solid #e5e7eb;">Status</th>
+                <th style="padding: 6px; border: 1px solid #e5e7eb;">Pagador</th>
+                <th style="padding: 6px; border: 1px solid #e5e7eb; text-align: right;">Valor</th>
+            </tr>
+        `;
+        table.appendChild(thead);
+        
+        const tbody = document.createElement('tbody');
+        filteredExpenses.forEach((exp, i) => {
+            const tr = document.createElement('tr');
+            tr.style.backgroundColor = i % 2 === 0 ? '#ffffff' : '#f9fafb';
+            tr.innerHTML = `
+                <td style="padding: 6px; border: 1px solid #e5e7eb;">${exp.date}</td>
+                <td style="padding: 6px; border: 1px solid #e5e7eb;">${exp.description}</td>
+                <td style="padding: 6px; border: 1px solid #e5e7eb;">${exp.category}</td>
+                <td style="padding: 6px; border: 1px solid #e5e7eb;">${exp.status || 'Pago'}</td>
+                <td style="padding: 6px; border: 1px solid #e5e7eb;">${exp.payer}</td>
+                <td style="padding: 6px; border: 1px solid #e5e7eb; text-align: right;">${formatCurrency(exp.amount)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        container.appendChild(table);
+
+        const opt = {
+            margin:       0.5,
+            filename:     'relatorio_sobrados_financeiro.pdf',
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2 },
+            jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+        };
+
+        window.html2pdf().set(opt).from(container).outputPdf('blob').then(async (pdfBlob) => {
+            const file = new File([pdfBlob], 'relatorio_sobrados_financeiro.pdf', { type: 'application/pdf' });
+            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                try {
+                    await navigator.share({
+                        files: [file],
+                        title: 'Relatório Financeiro Obra',
+                    });
+                } catch (e) {
+                    console.log("Compartilhamento cancelado ou falhou", e);
+                    window.html2pdf().set(opt).from(container).save();
+                }
+            } else {
+                window.html2pdf().set(opt).from(container).save();
+            }
+        });
+    };
+
     return (
         <div className="app-container">
             <header className="header">
@@ -859,13 +955,24 @@ function App() {
                         <option value="A Pagar">A Pagar</option>
                     </select>
 
-                    <button onClick={handleExportCSV} className="btn-export-icon" title="Baixar relatório em Excel">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="7 10 12 15 17 10"></polyline>
-                            <line x1="12" y1="15" x2="12" y2="3"></line>
-                        </svg>
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button onClick={handleExportCSV} className="btn-export-icon" title="Baixar relatório em Excel / CSV">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                        </button>
+                        <button onClick={handleExportTablePDF} className="btn-export-icon" title="Baixar relatório em PDF">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                <polyline points="10 9 9 9 8 9"></polyline>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
 
                 {filteredExpenses.length === 0 ? (
