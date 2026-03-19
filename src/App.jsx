@@ -36,6 +36,9 @@ function App() {
     const [viewReceipt, setViewReceipt] = useState(null);
     const [viewSettlementDetails, setViewSettlementDetails] = useState(false);
 
+    // Amin Mode State
+    const [isAdmin, setIsAdmin] = useState(false);
+
     // Pagination and Filter states
     const [currentPage, setCurrentPage] = useState(1);
     const ITEMS_PER_PAGE = 6;
@@ -65,12 +68,12 @@ function App() {
     useEffect(() => {
         async function loadData() {
             try {
-                        // Fetch initial data
+                // Fetch initial data
                 const { data, error } = await supabase
                     .from('expenses')
                     .select('*')
                     .order('isodate', { ascending: false });
-                
+
                 if (error) throw error;
                 if (data) {
                     const mappedData = data.map(item => ({
@@ -153,7 +156,7 @@ function App() {
         if (receiptFiles && receiptFiles.length > 0) {
             for (const file of receiptFiles) {
                 if (file.size > 10 * 1024 * 1024) continue; // Skip files > 10MB
-                
+
                 try {
                     const fileExt = file.name.split('.').pop();
                     const fileName = `${uuidv4()}.${fileExt}`;
@@ -188,7 +191,7 @@ function App() {
             amount: parsedAmount,
             payer,
             status,
-            receipts: newReceiptsArray 
+            receipts: newReceiptsArray
         }
 
         // Send to Supabase
@@ -200,7 +203,7 @@ function App() {
             console.error("Error inserting expense:", error);
             alert("Erro ao salvar despesa. Tente novamente.");
         } else {
-             // Go back to the first page when adding a new expense
+            // Go back to the first page when adding a new expense
             setCurrentPage(1);
 
             // Reset form
@@ -310,7 +313,7 @@ function App() {
         if (newReceipts.length > 0) {
             const currentReceipts = exp.receipts || (exp.receipt ? [exp.receipt] : []);
             const updatedReceipts = [...currentReceipts, ...newReceipts];
-            
+
             const { error } = await supabase
                 .from('expenses')
                 .update({ receipts: updatedReceipts })
@@ -321,14 +324,14 @@ function App() {
                 alert("Erro ao salvar o comprovante no gasto: " + error.message);
             }
         }
-        
+
         setUploadingId(null);
     }
 
     const deleteFilesFromStorage = async (urls) => {
         if (!urls || urls.length === 0) return;
         const fileNames = urls.map(url => {
-            try { return url.split('/').pop().split('?')[0]; } 
+            try { return url.split('/').pop().split('?')[0]; }
             catch { return url; }
         }).filter(Boolean);
 
@@ -345,12 +348,12 @@ function App() {
 
             const currentReceipts = exp.receipts || (exp.receipt ? [exp.receipt] : []);
             const urlToRemove = currentReceipts[indexToRemove];
-            
+
             // Delete actual file from Supabase Storage Bucket
             await deleteFilesFromStorage([urlToRemove]);
 
             const newReceipts = currentReceipts.filter((_, idx) => idx !== indexToRemove);
-            
+
             const { error } = await supabase
                 .from('expenses')
                 .update({ receipts: newReceipts })
@@ -376,14 +379,14 @@ function App() {
 
             // Delete associated files from storage first
             if (expToDelete) {
-               const allReceipts = expToDelete.receipts || (expToDelete.receipt ? [expToDelete.receipt] : []);
-               if (allReceipts.length > 0) {
-                   await deleteFilesFromStorage(allReceipts);
-               }
+                const allReceipts = expToDelete.receipts || (expToDelete.receipt ? [expToDelete.receipt] : []);
+                if (allReceipts.length > 0) {
+                    await deleteFilesFromStorage(allReceipts);
+                }
             }
 
             const { error } = await supabase.from('expenses').delete().eq('id', id);
-            
+
             if (error) {
                 console.error("Error deleting:", error);
                 alert("Erro ao excluir!");
@@ -399,32 +402,7 @@ function App() {
         }
     }
 
-    const handleExportCSV = () => {
-        const headers = ["Data", "Descrição", "Categoria", "Status", "Pagador", "Valor (R$)"];
-        const csvContent = [
-            headers.join(";"),
-            ...expenses.map(exp => {
-                return [
-                    exp.date,
-                    `"${exp.description}"`,
-                    exp.category,
-                    exp.status || 'Pago',
-                    exp.payer,
-                    exp.amount.toString().replace('.', ',')
-                ].join(";");
-            })
-        ].join("\n");
 
-        // \uFEFF is the BOM for UTF-8 so Excel opens it with correct accents
-        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', 'sobrados_gastos.csv');
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
 
     const handleExportPDF = () => {
         const element = document.getElementById('settlement-report-content');
@@ -590,6 +568,46 @@ function App() {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
     }
 
+    const handleExportCSV = () => {
+        const headers = ["Data", "Descrição", "Categoria", "Status", "Pagador", "Valor (R$)"];
+        
+        let csvBody = expenses.map(exp => {
+            return [
+                exp.date,
+                `"${exp.description}"`,
+                exp.category,
+                exp.status || 'Pago',
+                exp.payer,
+                exp.amount.toString().replace('.', ',')
+            ].join(";");
+        }).join("\n");
+
+        // Format summaries
+        const summaryText = [
+            ";", 
+            "RESUMO FINANCEIRO;;;;;",
+            `Gasto Total da Obra:;${formatCurrency(total)};;;;`,
+            `Vinícius Pagou:;${formatCurrency(totalVinicius)};;;;`,
+            `Luiz Pagou:;${formatCurrency(totalLuiz)};;;;`,
+            `Pagos Juntos (Ambos):;${formatCurrency(totalAmbos)};;;;`,
+            ";", 
+            "SITUAÇÃO DO ACERTO;;;;;",
+            `${settlementMsg};;;;;`
+        ].join("\n");
+
+        const csvContent = headers.join(";") + "\n" + csvBody + "\n" + summaryText;
+
+        // \uFEFF is the BOM for UTF-8 so Excel opens it with correct accents
+        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', 'sobrados_gastos_completo.csv');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     // Filtering Logic
     const filteredExpenses = expenses.filter(exp => {
         const matchesSearch = exp.description.toLowerCase().includes(searchTerm.toLowerCase());
@@ -610,96 +628,101 @@ function App() {
     return (
         <div className="app-container">
             <header className="header">
-                <h1 className="header-title">
-                    <svg className="title-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M2 20h20"></path>
-                        <path d="M5 20V5l9-3 6 3v15"></path>
-                        <path d="M9 20V9h6v11"></path>
-                    </svg>
-                    Sobrados Finance
-                </h1>
-                <p className="header-subtitle">Controle de Custos da Obra</p>
+                <div>
+                    <h1 className="header-title">
+                        <svg className="title-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M2 20h20"></path>
+                            <path d="M5 20V5l9-3 6 3v15"></path>
+                            <path d="M9 20V9h6v11"></path>
+                        </svg>
+                        Sobrados
+                        {isAdmin && <span style={{ fontSize: '12px', color: 'var(--primary)', marginLeft: '8px' }}>(Modo Edição)</span>}
+                    </h1>
+                    <p className="header-subtitle">Controle de Custos da Obra</p>
+                </div>
             </header>
 
-            {/* FORM: Registrar Novo Gasto - Moved to Top */}
-            <section className="card">
-                <h2 className="card-title">
-                    <svg className="title-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    Registrar Novo Gasto
-                </h2>
-                <form onSubmit={handleAddExpense} className="expense-form-grid">
-                    <div className="form-group">
-                        <label className="form-label">Data</label>
-                        <input
-                            type="date"
-                            value={date}
-                            onChange={(e) => setDate(e.target.value)}
-                            required
-                        />
-                    </div>
-                    <div className="form-group desc-group">
-                        <label className="form-label">Descrição</label>
-                        <input
-                            type="text"
-                            placeholder="Ex: Engenheiro, Cimento, etc."
-                            value={desc}
-                            onChange={(e) => setDesc(e.target.value)}
-                            required
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Categoria</label>
-                        <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                            {CATEGORIES.map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Status</label>
-                        <select value={status} onChange={(e) => setStatus(e.target.value)}>
-                            <option value="Pago">Pago</option>
-                            <option value="A Pagar">A Pagar</option>
-                        </select>
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Quem Pagou?</label>
-                        <select value={payer} onChange={(e) => setPayer(e.target.value)}>
-                            <option value="Vinícius">Vinícius</option>
-                            <option value="Luiz">Luiz</option>
-                            <option value="Ambos">Ambos</option>
-                        </select>
-                    </div>
-                    <div className="form-group width-auto">
-                        <label className="form-label">Valor (R$)</label>
-                        <input
-                            type="text"
-                            placeholder="0,00"
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            required
-                        />
-                    </div>
-                    <div className="form-group" style={{ gridColumn: 'span 12' }}>
-                        <label className="form-label">Recibo / Comprovante (Opcional)</label>
-                        <input
-                            type="file"
-                            multiple
-                            accept="image/*,application/pdf"
-                            onChange={(e) => setReceiptFiles(Array.from(e.target.files))}
-                            key={receiptFiles.length ? receiptFiles[0].name : 'empty'}
-                            className="file-input"
-                        />
-                        {receiptFiles.length > 0 && <small style={{ display: 'block', marginTop: '4px', color: 'var(--text-muted)' }}>{receiptFiles.length} arquivo(s) selecionado(s)</small>}
-                    </div>
-                    <div className="form-group submit-group">
-                        <button type="submit" className="btn-primary">Adicionar Lançamento</button>
-                    </div>
-                </form>
-            </section>
+            {/* FORM: Registrar Novo Gasto - Moved to Top - Only shown if Admin */}
+            {isAdmin && (
+                <section className="card">
+                    <h2 className="card-title">
+                        <svg className="title-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Registrar Novo Gasto
+                    </h2>
+                    <form onSubmit={handleAddExpense} className="expense-form-grid">
+                        <div className="form-group">
+                            <label className="form-label">Data</label>
+                            <input
+                                type="date"
+                                value={date}
+                                onChange={(e) => setDate(e.target.value)}
+                                required
+                            />
+                        </div>
+                        <div className="form-group desc-group">
+                            <label className="form-label">Descrição</label>
+                            <input
+                                type="text"
+                                placeholder="Ex: Engenheiro, Cimento, etc."
+                                value={desc}
+                                onChange={(e) => setDesc(e.target.value)}
+                                required
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Categoria</label>
+                            <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                                {CATEGORIES.map(cat => (
+                                    <option key={cat} value={cat}>{cat}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Status</label>
+                            <select value={status} onChange={(e) => setStatus(e.target.value)}>
+                                <option value="Pago">Pago</option>
+                                <option value="A Pagar">A Pagar</option>
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Quem Pagou?</label>
+                            <select value={payer} onChange={(e) => setPayer(e.target.value)}>
+                                <option value="Vinícius">Vinícius</option>
+                                <option value="Luiz">Luiz</option>
+                                <option value="Ambos">Ambos</option>
+                            </select>
+                        </div>
+                        <div className="form-group width-auto">
+                            <label className="form-label">Valor (R$)</label>
+                            <input
+                                type="text"
+                                placeholder="0,00"
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
+                                required
+                            />
+                        </div>
+                        <div className="form-group" style={{ gridColumn: 'span 12' }}>
+                            <label className="form-label">Recibo / Comprovante (Opcional)</label>
+                            <input
+                                type="file"
+                                multiple
+                                accept="image/*,application/pdf"
+                                onChange={(e) => setReceiptFiles(Array.from(e.target.files))}
+                                key={receiptFiles.length ? receiptFiles[0].name : 'empty'}
+                                className="file-input"
+                            />
+                            {receiptFiles.length > 0 && <small style={{ display: 'block', marginTop: '4px', color: 'var(--text-muted)' }}>{receiptFiles.length} arquivo(s) selecionado(s)</small>}
+                        </div>
+                        <div className="form-group submit-group">
+                            <button type="submit" className="btn-primary">Adicionar Lançamento</button>
+                        </div>
+                    </form>
+                </section>
+            )}
 
             {/* BALANCE DASHBOARD */}
             <section className="card">
@@ -960,7 +983,7 @@ function App() {
                                                                     )}
                                                                 </label>
                                                             )}
-                                                            {exp.status === 'A Pagar' && (
+                                                            {isAdmin && exp.status === 'A Pagar' && (
                                                                 <button
                                                                     onClick={() => handleMarkAsPaid(exp.id)}
                                                                     className="btn-success"
@@ -971,26 +994,30 @@ function App() {
                                                                     </svg>
                                                                 </button>
                                                             )}
-                                                            <button
-                                                                onClick={() => handleEditClick(exp)}
-                                                                className="btn-edit"
-                                                                title="Editar Despesa"
-                                                            >
-                                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                                                                </svg>
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDelete(exp.id)}
-                                                                className="btn-danger"
-                                                                title="Remover Despesa"
-                                                            >
-                                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                    <polyline points="3 6 5 6 21 6"></polyline>
-                                                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                                                </svg>
-                                                            </button>
+                                                            {isAdmin && (
+                                                                <>
+                                                                    <button
+                                                                        onClick={() => handleEditClick(exp)}
+                                                                        className="btn-edit"
+                                                                        title="Editar Despesa"
+                                                                    >
+                                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                                                        </svg>
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleDelete(exp.id)}
+                                                                        className="btn-danger"
+                                                                        title="Remover Despesa"
+                                                                    >
+                                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                            <polyline points="3 6 5 6 21 6"></polyline>
+                                                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                                        </svg>
+                                                                    </button>
+                                                                </>
+                                                            )}
                                                         </>
                                                     )}
                                                 </div>
@@ -1141,65 +1168,110 @@ function App() {
             {viewReceipt && (() => {
                 const currentViewReceipt = expenses.find(e => e.id === viewReceipt.id) || viewReceipt;
                 return (
-                <div className="receipt-modal-overlay" onClick={() => setViewReceipt(null)}>
-                    <div className="receipt-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
-                        <div className="receipt-modal-header">
-                            <h3>Comprovantes ({currentViewReceipt.receipts?.length || 1})</h3>
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <label className="btn-success" title="Adicionar mais um" style={{ width: '32px', height: '32px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: '8px' }}>
-                                    <input
-                                        type="file"
-                                        multiple
-                                        accept="image/*,application/pdf"
-                                        style={{ display: 'none' }}
-                                        onChange={async (e) => {
-                                            await handleAttachReceipt(currentViewReceipt.id, e.target.files);
-                                            e.target.value = null;
-                                        }}
-                                        disabled={uploadingId === currentViewReceipt.id}
-                                    />
-                                    {uploadingId === currentViewReceipt.id ? (
-                                        <span style={{ fontSize: '11px', fontWeight: 'bold' }}>...</span>
-                                    ) : (
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    <div className="receipt-modal-overlay" onClick={() => setViewReceipt(null)}>
+                        <div className="receipt-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%' }}>
+                            <div className="receipt-modal-header">
+                                <h3>Comprovantes ({currentViewReceipt.receipts?.length || 1})</h3>
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    {isAdmin && (
+                                        <label className="btn-success" title="Adicionar mais um" style={{ width: '32px', height: '32px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: '8px' }}>
+                                            <input
+                                                type="file"
+                                                multiple
+                                                accept="image/*,application/pdf"
+                                                style={{ display: 'none' }}
+                                                onChange={async (e) => {
+                                                    await handleAttachReceipt(currentViewReceipt.id, e.target.files);
+                                                    e.target.value = null;
+                                                }}
+                                                disabled={uploadingId === currentViewReceipt.id}
+                                            />
+                                            {uploadingId === currentViewReceipt.id ? (
+                                                <span style={{ fontSize: '11px', fontWeight: 'bold' }}>...</span>
+                                            ) : (
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                            )}
+                                        </label>
                                     )}
-                                </label>
-                                <button className="btn-close" onClick={() => setViewReceipt(null)}>
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                                </button>
+                                    <button className="btn-close" onClick={() => setViewReceipt(null)}>
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="receipt-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxHeight: '70vh', overflowY: 'auto' }}>
+                                {(currentViewReceipt.receipts || (currentViewReceipt.receipt ? [currentViewReceipt.receipt] : [])).map((urlOrB64, index) => (
+                                    <div key={index} style={{ position: 'relative', border: '1px solid var(--border)', borderRadius: '12px', padding: '0.5rem', background: 'var(--background)' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'center', padding: '0 0.5rem' }}>
+                                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Anexo {index + 1}</span>
+                                            {isAdmin && (
+                                                <button
+                                                    className="btn-danger"
+                                                    onClick={() => handleDeleteReceipt(currentViewReceipt.id, index)}
+                                                    title="Apagar Comprovante"
+                                                    style={{ width: '28px', height: '28px', padding: 0 }}
+                                                >
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                    </svg>
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {(urlOrB64 && (urlOrB64.includes('.pdf') || urlOrB64.startsWith('data:application/pdf'))) ? (
+                                            <iframe src={urlOrB64} title={`Recibo PDF ${index}`} width="100%" height="300px" style={{ border: 'none', borderRadius: '8px' }}></iframe>
+                                        ) : (
+                                            <img src={urlOrB64} alt={`Recibo ${index}`} style={{ width: '100%', height: 'auto', borderRadius: '8px', display: 'block' }} />
+                                        )}
+                                    </div>
+                                ))}
                             </div>
                         </div>
-                        <div className="receipt-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxHeight: '70vh', overflowY: 'auto' }}>
-                            {(currentViewReceipt.receipts || (currentViewReceipt.receipt ? [currentViewReceipt.receipt] : [])).map((urlOrB64, index) => (
-                                <div key={index} style={{ position: 'relative', border: '1px solid var(--border)', borderRadius: '12px', padding: '0.5rem', background: 'var(--background)' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'center', padding: '0 0.5rem' }}>
-                                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Anexo {index + 1}</span>
-                                        <button
-                                            className="btn-danger"
-                                            onClick={() => handleDeleteReceipt(currentViewReceipt.id, index)}
-                                            title="Apagar Comprovante"
-                                            style={{ width: '28px', height: '28px', padding: 0 }}
-                                        >
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                <polyline points="3 6 5 6 21 6"></polyline>
-                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                            </svg>
-                                        </button>
-                                    </div>
-
-                                    {(urlOrB64 && (urlOrB64.includes('.pdf') || urlOrB64.startsWith('data:application/pdf'))) ? (
-                                        <iframe src={urlOrB64} title={`Recibo PDF ${index}`} width="100%" height="300px" style={{ border: 'none', borderRadius: '8px' }}></iframe>
-                                    ) : (
-                                        <img src={urlOrB64} alt={`Recibo ${index}`} style={{ width: '100%', height: 'auto', borderRadius: '8px', display: 'block' }} />
-                                    )}
-                                </div>
-                            ))}
-                        </div>
                     </div>
-                </div>
                 );
             })()}
 
+            {/* CADEADO ESCONDIDO NO RODAPÉ */}
+            <div style={{ textAlign: 'center', padding: '10px 0', marginTop: '0' }}>
+                <button
+                    onClick={() => {
+                        if (isAdmin) {
+                            setIsAdmin(false);
+                        } else {
+                            const pwd = prompt("Senha:");
+                            if (pwd === "sobrados123") {
+                                setIsAdmin(true);
+                            } else if (pwd !== null) {
+                                alert("Senha incorreta");
+                            }
+                        }
+                    }}
+                    style={{
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: isAdmin ? 'var(--primary)' : 'var(--text-muted)',
+                        opacity: isAdmin ? 0.8 : 0.2, // Quase invisível quando não admin
+                        padding: '10px',
+                        transition: 'opacity 0.2s',
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+                    onMouseLeave={(e) => e.currentTarget.style.opacity = isAdmin ? '0.8' : '0.2'}
+                    title="Acesso Restrito"
+                >
+                    {isAdmin ? (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+                        </svg>
+                    ) : (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+                    )}
+                </button>
+            </div>
         </div>
     )
 }

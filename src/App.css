@@ -1,7 +1,7 @@
 .app-container {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1rem;
 }
 
 .header {
@@ -143,12 +143,12 @@
   font-size: 0.75rem;
   font-weight: 700;
   cursor: pointer;
-  padding: 0.2rem 0.6rem;
-  margin-left: 0.75rem;
+  padding: 0.4rem 0.8rem;
   transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  white-space: nowrap;
 }
 
 .btn-details-link:hover {
@@ -213,6 +213,13 @@
   gap: 0.4rem;
   grid-column: span 3;
   min-width: 0;
+}
+
+/* Fix for iOS date input rendering */
+input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 48px;
 }
 
 .form-group.desc-group {
@@ -596,6 +603,85 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+}
+
+/* Mobile Adjustments for Table and Filters */
+@media (max-width: 768px) {
+  .settlement-alert {
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+  
+  .filters-bar {
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+
+  .filter-search {
+    width: 100%;
+  }
+
+  .filter-select {
+    width: 100%;
+    flex: none;
+  }
+
+  /* Transform table into cards on mobile */
+  .expenses-table thead {
+    display: none;
+  }
+
+  .expenses-table, .expenses-table tbody, .expenses-table tr, .expenses-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .expenses-table tr {
+    margin-bottom: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+  }
+  
+  .expenses-table tr:hover {
+    background: transparent;
+  }
+
+  .expenses-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-align: right;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+    padding: 0.8rem 0.5rem;
+  }
+
+  .expenses-table td:last-child {
+    border-bottom: none;
+    justify-content: center;
+    padding-top: 1rem;
+  }
+
+  /* Use data-label attribute for the mobile "headers" */
+  .expenses-table td::before {
+    content: attr(data-label);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 700;
+    text-align: left;
+    margin-right: 1rem;
+  }
+  
+  .text-right, .text-center {
+    text-align: right;
+  }
+  
+  .td-actions .actions-flex {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 /* Status Badges */
