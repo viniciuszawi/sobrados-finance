@@ -581,56 +581,91 @@ function App() {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const paginatedExpenses = filteredExpenses.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
-    const handleExportCSV = async () => {
-        const escapeCSV = (str) => {
-            if (str === null || str === undefined) return '""';
-            const s = String(str);
-            return `"${s.replace(/"/g, '""')}"`;
+    const handleExportTablePDF = () => {
+        // Build a temporary styled HTML element for the PDF
+        const container = document.createElement('div');
+        container.style.fontFamily = "'Inter', 'Helvetica', sans-serif";
+        container.style.color = '#1e293b';
+        container.style.padding = '0';
+        container.style.width = '700px'; // Fixed width to match letter page minus margins
+        container.style.maxWidth = '700px';
+
+        // Header
+        container.innerHTML = `
+            <div style="text-align: center; margin-bottom: 24px;">
+                <h1 style="font-size: 22px; color: #1e3a8a; margin: 0 0 4px 0;">Sobrados Finance</h1>
+                <p style="font-size: 12px; color: #64748b; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;">Relatório de Lançamentos</p>
+                <p style="font-size: 11px; color: #94a3b8; margin: 4px 0 0 0;">Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 20px; table-layout: fixed;">
+                <colgroup>
+                    <col style="width: 14%;" />
+                    <col style="width: 24%;" />
+                    <col style="width: 22%;" />
+                    <col style="width: 10%;" />
+                    <col style="width: 13%;" />
+                    <col style="width: 17%;" />
+                </colgroup>
+                <thead>
+                    <tr style="background: #f1f5f9;">
+                        <th style="padding: 8px 4px; text-align: left; border-bottom: 2px solid #e2e8f0; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; font-size: 8px;">Data</th>
+                        <th style="padding: 8px 4px; text-align: left; border-bottom: 2px solid #e2e8f0; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; font-size: 8px;">Descrição</th>
+                        <th style="padding: 8px 4px; text-align: left; border-bottom: 2px solid #e2e8f0; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; font-size: 8px;">Categoria</th>
+                        <th style="padding: 8px 4px; text-align: center; border-bottom: 2px solid #e2e8f0; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; font-size: 8px;">Status</th>
+                        <th style="padding: 8px 4px; text-align: center; border-bottom: 2px solid #e2e8f0; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; font-size: 8px;">Pagador</th>
+                        <th style="padding: 8px 4px; text-align: right; border-bottom: 2px solid #e2e8f0; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; font-size: 8px;">Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${expenses.map((exp, i) => `
+                        <tr style="background: ${i % 2 === 0 ? '#fff' : '#f8fafc'};">
+                            <td style="padding: 6px 4px; border-bottom: 1px solid #f1f5f9; color: #64748b; overflow: hidden;">${exp.date}</td>
+                            <td style="padding: 6px 4px; border-bottom: 1px solid #f1f5f9; font-weight: 600; color: #1e293b; overflow: hidden; text-overflow: ellipsis;">${exp.description}</td>
+                            <td style="padding: 6px 4px; border-bottom: 1px solid #f1f5f9; color: #64748b; overflow: hidden; text-overflow: ellipsis;">${exp.category}</td>
+                            <td style="padding: 6px 4px; border-bottom: 1px solid #f1f5f9; text-align: center;">
+                                <span style="padding: 2px 6px; border-radius: 12px; font-size: 8px; font-weight: 600; ${(exp.status || 'Pago') === 'Pago' ? 'background:#dcfce7;color:#166534;' : 'background:#fee2e2;color:#991b1b;'}">${exp.status || 'Pago'}</span>
+                            </td>
+                            <td style="padding: 6px 4px; border-bottom: 1px solid #f1f5f9; text-align: center; font-weight: 600;">${exp.payer}</td>
+                            <td style="padding: 6px 4px; border-bottom: 1px solid #f1f5f9; text-align: right; font-weight: 700; color: #1e3a8a; white-space: nowrap;">${formatCurrency(exp.amount)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+                <h3 style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; margin: 0 0 12px 0;">Resumo Financeiro</h3>
+                <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 11px;">
+                    <span style="color: #64748b;">Gasto Total da Obra</span>
+                    <strong style="color: #1e293b;">${formatCurrency(total)}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 11px;">
+                    <span style="color: #60a5fa;">Vinícius Pagou</span>
+                    <strong style="color: #1e293b;">${formatCurrency(totalVinicius)}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 11px;">
+                    <span style="color: #34d399;">Luiz Pagou</span>
+                    <strong style="color: #1e293b;">${formatCurrency(totalLuiz)}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 11px;">
+                    <span style="color: #fbbf24;">Pagos Juntos (Ambos)</span>
+                    <strong style="color: #1e293b;">${formatCurrency(totalAmbos)}</strong>
+                </div>
+                <div style="border-top: 1px dashed #cbd5e1; margin-top: 8px; padding-top: 8px; text-align: center; font-size: 12px; font-weight: 600; color: ${settlementClass === 'active' ? '#d97706' : '#64748b'};">
+                    ${settlementMsg}
+                </div>
+            </div>
+        `;
+
+        const opt = {
+            margin: [0.4, 0.4, 0.4, 0.4],
+            filename: 'sobrados-lancamentos.pdf',
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
+            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
         };
 
-        const headers = ["Data", "Descrição", "Categoria", "Status", "Pagador", "Valor (R$)"];
-        
-        let csvBody = expenses.map(exp => {
-            return [
-                escapeCSV(exp.date),
-                escapeCSV(exp.description),
-                escapeCSV(exp.category),
-                escapeCSV(exp.status || 'Pago'),
-                escapeCSV(exp.payer),
-                escapeCSV(exp.amount.toString().replace('.', ','))
-            ].join(",");
-        }).join("\n");
-
-        // Format summaries
-        const summaryText = [
-            "", 
-            escapeCSV("RESUMO FINANCEIRO") + ",,,,,",
-            `${escapeCSV("Gasto Total da Obra:")},${escapeCSV(formatCurrency(total))},,,,`,
-            `${escapeCSV("Vinícius Pagou:")},${escapeCSV(formatCurrency(totalVinicius))},,,,`,
-            `${escapeCSV("Luiz Pagou:")},${escapeCSV(formatCurrency(totalLuiz))},,,,`,
-            `${escapeCSV("Pagos Juntos (Ambos):")},${escapeCSV(formatCurrency(totalAmbos))},,,,`,
-            "", 
-            escapeCSV("SITUAÇÃO DO ACERTO") + ",,,,,",
-            `${escapeCSV(settlementMsg)},,,,,`
-        ].join("\n");
-
-        const csvContent = headers.map(escapeCSV).join(",") + "\n" + csvBody + "\n" + summaryText;
-
-        // \uFEFF is the BOM for UTF-8 so Excel opens it with correct accents
-        // Removed trailing semicolon from type, as it can cause issues on Android
-        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8' });
-        const fileName = 'sobrados_gastos_completo.csv';
-
-        // Faz o download direto sempre
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', fileName);
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(url), 100);
+        window.html2pdf().set(opt).from(container).save();
     };
 
     if (isLoading) {
@@ -861,13 +896,13 @@ function App() {
                         <option value="A Pagar">A Pagar</option>
                     </select>
 
-                    <button onClick={handleExportCSV} className="btn-export" title="Baixar relatório em Excel / CSV">
+                    <button onClick={handleExportTablePDF} className="btn-export" title="Baixar relatório em PDF">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="7 10 12 15 17 10"></polyline>
                             <line x1="12" y1="15" x2="12" y2="3"></line>
                         </svg>
-                        <span className="export-label">Exportar Planilha</span>
+                        <span className="export-label">Exportar PDF</span>
                     </button>
                 </div>
 
