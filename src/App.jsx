@@ -18,6 +18,7 @@ const CATEGORIES = [
 
 function App() {
     const [expenses, setExpenses] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [theme] = useState(() => localStorage.getItem('sobrados-theme') || 'light');
 
     // Form states
@@ -84,6 +85,8 @@ function App() {
                 }
             } catch (e) {
                 console.error("Failed to load expenses from Supabase", e);
+            } finally {
+                setIsLoading(false);
             }
         }
 
@@ -629,6 +632,28 @@ function App() {
         document.body.removeChild(link);
         setTimeout(() => URL.revokeObjectURL(url), 100);
     };
+
+    if (isLoading) {
+        return (
+            <div className="app-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', textAlign: 'center' }}>
+                <style>{`
+                    @keyframes spin { 100% { transform: rotate(360deg); } }
+                    .spin-animation { animation: spin 1s linear infinite; }
+                `}</style>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="spin-animation" style={{ marginBottom: '16px' }}>
+                    <line x1="12" y1="2" x2="12" y2="6"></line>
+                    <line x1="12" y1="18" x2="12" y2="22"></line>
+                    <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                    <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                    <line x1="2" y1="12" x2="6" y2="12"></line>
+                    <line x1="18" y1="12" x2="22" y2="12"></line>
+                    <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                    <line x1="16.24" y1="4.93" x2="19.07" y2="7.76"></line>
+                </svg>
+                <h2 style={{ color: 'var(--text)', fontSize: '18px', fontWeight: '500' }}>Buscando dados da obra...</h2>
+            </div>
+        );
+    }
 
     return (
         <div className="app-container">
