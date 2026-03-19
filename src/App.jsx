@@ -18,7 +18,7 @@ const CATEGORIES = [
 
 function App() {
     const [expenses, setExpenses] = useState([]);
-    const [theme, setTheme] = useState(() => localStorage.getItem('sobrados-theme') || 'light');
+    const [theme] = useState(() => localStorage.getItem('sobrados-theme') || 'light');
 
     // Form states
     const [desc, setDesc] = useState('')
@@ -130,13 +130,6 @@ function App() {
         localStorage.setItem('sobrados-theme', theme);
     }, [theme]);
 
-    const toBase64 = file => new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = error => reject(error);
-    });
-
     const handleAddExpense = async (e) => {
         e.preventDefault()
         if (!desc || !amount || !date) return
@@ -162,7 +155,7 @@ function App() {
                     const fileName = `${uuidv4()}.${fileExt}`;
                     const filePath = `${fileName}`; // Saving to root of 'receipts' bucket
 
-                    const { error: uploadError, data } = await supabase.storage
+                    const { error: uploadError } = await supabase.storage
                         .from('receipts')
                         .upload(filePath, file);
 
@@ -467,7 +460,7 @@ function App() {
         });
 
         return result;
-    }, [expenses])
+    }, [expenses, filterMonth])
 
     // Settlement Logic
     // Total of the project that needed to be divided
@@ -562,105 +555,79 @@ function App() {
         });
 
         return { creditor, debtor, items: breakdownItems.reverse() /* show newest first */ };
-    }, [expenses, settlementClass, totalVinicius, totalLuiz]);
+    }, [expenses, settlementClass, totalVinicius, totalLuiz, filterMonth]);
 
     function formatCurrency(val) {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
     }
 
-    const handleExportTablePDF = () => {
-        const container = document.createElement('div');
-        container.style.padding = '20px';
-        container.style.fontFamily = 'Inter, sans-serif';
-        container.style.color = '#1f2937';
-        // Position off-screen so html2pdf can compute heights correctly without affecting UI
-        container.style.position = 'absolute';
-        container.style.top = '-9999px';
-        container.style.left = '-9999px';
-        container.style.width = '800px';
-        
-        const title = document.createElement('h2');
-        title.innerText = 'Relatório Financeiro da Obra';
-        title.style.textAlign = 'center';
-        title.style.marginBottom = '20px';
-        container.appendChild(title);
-        
-        const summaryGrid = document.createElement('div');
-        summaryGrid.style.display = 'flex';
-        summaryGrid.style.justifyContent = 'space-between';
-        summaryGrid.style.marginBottom = '20px';
-        summaryGrid.style.borderBottom = '2px solid #e5e7eb';
-        summaryGrid.style.paddingBottom = '10px';
-        summaryGrid.style.fontSize = '12px';
-        
-        summaryGrid.innerHTML = `
-            <div><strong>Gasto Total:</strong> ${formatCurrency(total)}</div>
-            <div><strong style="color: #60a5fa">Vinícius Pagou:</strong> ${formatCurrency(totalVinicius)}</div>
-            <div><strong style="color: #34d399">Luiz Pagou:</strong> ${formatCurrency(totalLuiz)}</div>
-            <div><strong style="color: #fbbf24">Ambos Pagaram:</strong> ${formatCurrency(totalAmbos)}</div>
-        `;
-        container.appendChild(summaryGrid);
-        
-        const msgDiv = document.createElement('div');
-        msgDiv.innerHTML = `<strong>Situação do Acerto:</strong> ${settlementMsg}`;
-        msgDiv.style.marginBottom = '20px';
-        msgDiv.style.textAlign = 'center';
-        msgDiv.style.fontSize = '14px';
-        container.appendChild(msgDiv);
-        
-        const table = document.createElement('table');
-        table.style.width = '100%';
-        table.style.borderCollapse = 'collapse';
-        table.style.fontSize = '11px';
-        
-        const thead = document.createElement('thead');
-        thead.innerHTML = `
-            <tr style="background-color: #f3f4f6; text-align: left;">
-                <th style="padding: 8px; border: 1px solid #e5e7eb;">Data</th>
-                <th style="padding: 8px; border: 1px solid #e5e7eb;">Descrição</th>
-                <th style="padding: 8px; border: 1px solid #e5e7eb;">Categoria</th>
-                <th style="padding: 8px; border: 1px solid #e5e7eb;">Status</th>
-                <th style="padding: 8px; border: 1px solid #e5e7eb;">Pagador</th>
-                <th style="padding: 8px; border: 1px solid #e5e7eb; text-align: right;">Valor</th>
-            </tr>
-        `;
-        table.appendChild(thead);
-        
-        const tbody = document.createElement('tbody');
-        filteredExpenses.forEach((exp, i) => {
-            const tr = document.createElement('tr');
-            tr.style.backgroundColor = i % 2 === 0 ? '#ffffff' : '#f9fafb';
-            tr.style.pageBreakInside = 'avoid'; // Prevent row cut-off between pages
-            
-            tr.innerHTML = `
-                <td style="padding: 8px; border: 1px solid #e5e7eb;">${exp.date}</td>
-                <td style="padding: 8px; border: 1px solid #e5e7eb;">${exp.description}</td>
-                <td style="padding: 8px; border: 1px solid #e5e7eb;">${exp.category}</td>
-                <td style="padding: 8px; border: 1px solid #e5e7eb;">${exp.status || 'Pago'}</td>
-                <td style="padding: 8px; border: 1px solid #e5e7eb;">${exp.payer}</td>
-                <td style="padding: 8px; border: 1px solid #e5e7eb; text-align: right;">${formatCurrency(exp.amount)}</td>
-            `;
-            tbody.appendChild(tr);
-        });
-        table.appendChild(tbody);
-        container.appendChild(table);
+    // Filtering Logic
+    const filteredExpenses = expenses.filter(exp => {
+        const matchesSearch = exp.description.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesCategory = filterCategory === '' || exp.category === filterCategory;
+        const expStatus = exp.status || 'Pago';
+        const matchesStatus = filterStatus === '' || expStatus === filterStatus;
+        const expMonth = exp.isoDate.substring(0, 7);
+        const matchesMonth = filterMonth === '' || expMonth === filterMonth;
 
-        document.body.appendChild(container); // Mount to DOM so dimensions are calculated correctly
+        return matchesSearch && matchesCategory && matchesStatus && matchesMonth;
+    });
 
-        const opt = {
-            margin:       0.5,
-            filename:     'relatorio_sobrados_financeiro.pdf',
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true, scrollY: 0 },
-            jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+    // Pagination Logic
+    const totalPages = Math.ceil(filteredExpenses.length / ITEMS_PER_PAGE);
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const paginatedExpenses = filteredExpenses.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+    const handleExportCSV = async () => {
+        const escapeCSV = (str) => {
+            if (str === null || str === undefined) return '""';
+            const s = String(str);
+            return `"${s.replace(/"/g, '""')}"`;
         };
 
-        window.html2pdf().set(opt).from(container).save().then(() => {
-            document.body.removeChild(container); // Cleanup
-        }).catch(err => {
-            console.error("Erro ao gerar PDF:", err);
-            document.body.removeChild(container);
-        });
+        const headers = ["Data", "Descrição", "Categoria", "Status", "Pagador", "Valor (R$)"];
+        
+        let csvBody = expenses.map(exp => {
+            return [
+                escapeCSV(exp.date),
+                escapeCSV(exp.description),
+                escapeCSV(exp.category),
+                escapeCSV(exp.status || 'Pago'),
+                escapeCSV(exp.payer),
+                escapeCSV(exp.amount.toString().replace('.', ','))
+            ].join(",");
+        }).join("\n");
+
+        // Format summaries
+        const summaryText = [
+            "", 
+            escapeCSV("RESUMO FINANCEIRO") + ",,,,,",
+            `${escapeCSV("Gasto Total da Obra:")},${escapeCSV(formatCurrency(total))},,,,`,
+            `${escapeCSV("Vinícius Pagou:")},${escapeCSV(formatCurrency(totalVinicius))},,,,`,
+            `${escapeCSV("Luiz Pagou:")},${escapeCSV(formatCurrency(totalLuiz))},,,,`,
+            `${escapeCSV("Pagos Juntos (Ambos):")},${escapeCSV(formatCurrency(totalAmbos))},,,,`,
+            "", 
+            escapeCSV("SITUAÇÃO DO ACERTO") + ",,,,,",
+            `${escapeCSV(settlementMsg)},,,,,`
+        ].join("\n");
+
+        const csvContent = headers.map(escapeCSV).join(",") + "\n" + csvBody + "\n" + summaryText;
+
+        // \uFEFF is the BOM for UTF-8 so Excel opens it with correct accents
+        // Removed trailing semicolon from type, as it can cause issues on Android
+        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8' });
+        const fileName = 'sobrados_gastos_completo.csv';
+
+        // Faz o download direto sempre
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', fileName);
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 100);
     };
 
     return (
@@ -868,13 +835,11 @@ function App() {
                         <option value="A Pagar">A Pagar</option>
                     </select>
 
-                    <button onClick={handleExportTablePDF} className="btn-export-icon" title="Baixar relatório em PDF">
+                    <button onClick={handleExportCSV} className="btn-export-icon" title="Baixar relatório em Excel / CSV">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="16" y1="13" x2="8" y2="13"></line>
-                            <line x1="16" y1="17" x2="8" y2="17"></line>
-                            <polyline points="10 9 9 9 8 9"></polyline>
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
                         </svg>
                     </button>
                 </div>
@@ -1114,7 +1079,7 @@ function App() {
                     </h2>
                     <div className="category-grid">
                         {Object.entries(categoryTotals)
-                            .filter(([_, amount]) => amount > 0)
+                            .filter(([, amount]) => amount > 0)
                             .sort((a, b) => b[1] - a[1]) // Sort highest first
                             .map(([cat, amount]) => (
                                 <div key={cat} className="category-item">
