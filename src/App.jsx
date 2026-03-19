@@ -569,33 +569,39 @@ function App() {
     }
 
     const handleExportCSV = async () => {
+        const escapeCSV = (str) => {
+            if (str === null || str === undefined) return '""';
+            const s = String(str);
+            return `"${s.replace(/"/g, '""')}"`;
+        };
+
         const headers = ["Data", "Descrição", "Categoria", "Status", "Pagador", "Valor (R$)"];
         
         let csvBody = expenses.map(exp => {
             return [
-                exp.date,
-                `"${exp.description}"`,
-                exp.category,
-                exp.status || 'Pago',
-                exp.payer,
-                exp.amount.toString().replace('.', ',')
-            ].join(";");
+                escapeCSV(exp.date),
+                escapeCSV(exp.description),
+                escapeCSV(exp.category),
+                escapeCSV(exp.status || 'Pago'),
+                escapeCSV(exp.payer),
+                escapeCSV(exp.amount.toString().replace('.', ','))
+            ].join(",");
         }).join("\n");
 
         // Format summaries
         const summaryText = [
-            ";", 
-            "RESUMO FINANCEIRO;;;;;",
-            `Gasto Total da Obra:;${formatCurrency(total)};;;;`,
-            `Vinícius Pagou:;${formatCurrency(totalVinicius)};;;;`,
-            `Luiz Pagou:;${formatCurrency(totalLuiz)};;;;`,
-            `Pagos Juntos (Ambos):;${formatCurrency(totalAmbos)};;;;`,
-            ";", 
-            "SITUAÇÃO DO ACERTO;;;;;",
-            `${settlementMsg};;;;;`
+            "", 
+            escapeCSV("RESUMO FINANCEIRO") + ",,,,,",
+            `${escapeCSV("Gasto Total da Obra:")},${escapeCSV(formatCurrency(total))},,,,`,
+            `${escapeCSV("Vinícius Pagou:")},${escapeCSV(formatCurrency(totalVinicius))},,,,`,
+            `${escapeCSV("Luiz Pagou:")},${escapeCSV(formatCurrency(totalLuiz))},,,,`,
+            `${escapeCSV("Pagos Juntos (Ambos):")},${escapeCSV(formatCurrency(totalAmbos))},,,,`,
+            "", 
+            escapeCSV("SITUAÇÃO DO ACERTO") + ",,,,,",
+            `${escapeCSV(settlementMsg)},,,,,`
         ].join("\n");
 
-        const csvContent = headers.join(";") + "\n" + csvBody + "\n" + summaryText;
+        const csvContent = headers.map(escapeCSV).join(",") + "\n" + csvBody + "\n" + summaryText;
 
         // \uFEFF is the BOM for UTF-8 so Excel opens it with correct accents
         // Removed trailing semicolon from type, as it can cause issues on Android
