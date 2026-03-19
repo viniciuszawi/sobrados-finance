@@ -122,59 +122,56 @@
   word-break: break-all;
 }
 
-.settlement-alert {
-  text-align: center;
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: var(--text-muted);
+/* Settlement Card */
+.settlement-card {
   border-top: 1px dashed var(--border);
-  padding-top: 1.25rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.settlement-row-inline {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.settlement-alert.active {
-  color: #d97706;
-  font-weight: 600;
-}
-
-.settlement-alert.neutral {
-  color: var(--text-muted);
-}
-
-.settlement-text-action {
+  padding-top: 1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.2rem;
+  gap: 0.4rem;
+  text-align: center;
 }
 
-.btn-details-link {
-  background: var(--surface);
+.settlement-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.settlement-amount {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #d97706;
+  line-height: 1.4;
+}
+
+.settlement-amount.neutral {
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.btn-details {
+  background: var(--background);
   border: 1px solid var(--border);
   border-radius: 9999px;
   color: var(--secondary);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 700;
   cursor: pointer;
-  padding: 0.4rem 0.8rem;
+  padding: 0.35rem 1rem;
   transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   white-space: nowrap;
+  margin-top: 0.1rem;
 }
 
-.btn-details-link:hover {
+.btn-details:hover {
   background: var(--surface-hover);
   color: var(--primary);
   transform: translateY(-1px);
@@ -630,18 +627,11 @@ input[type="date"] {
 
 /* Mobile Adjustments for Table and Filters */
 @media (max-width: 768px) {
-  .settlement-alert {
-    flex-direction: column;
-    gap: 0.8rem;
-  }
-
-  .settlement-alert .btn-details-link {
+  .settlement-card .btn-details {
     width: 100%;
     justify-content: center;
-    padding: 0.6rem 1rem;
-    font-size: 0.85rem;
   }
-  
+
   .filters-bar {
     flex-direction: column;
     gap: 0.8rem;
@@ -672,7 +662,8 @@ input[type="date"] {
     display: none;
   }
 
-  .expenses-table, .expenses-table tbody {
+  .expenses-table,
+  .expenses-table tbody {
     display: block;
     width: 100%;
   }
@@ -767,7 +758,8 @@ input[type="date"] {
     justify-content: flex-end;
   }
 
-  .text-right, .text-center {
+  .text-right,
+  .text-center {
     text-align: left;
   }
 }
@@ -1329,6 +1321,7 @@ input[type="date"] {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
