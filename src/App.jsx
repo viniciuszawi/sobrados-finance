@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase } from './supabaseClient'
 import './App.css'
@@ -37,8 +37,17 @@ function App() {
     const [viewReceipt, setViewReceipt] = useState(null);
     const [viewSettlementDetails, setViewSettlementDetails] = useState(false);
 
-    // Amin Mode State
+    // Admin Mode State
     const [isAdmin, setIsAdmin] = useState(false);
+
+    // Toast State
+    const [toast, setToast] = useState(null);
+    const toastTimeout = useRef(null);
+    const showToast = (message, type = 'success') => {
+        if (toastTimeout.current) clearTimeout(toastTimeout.current);
+        setToast({ message, type });
+        toastTimeout.current = setTimeout(() => setToast(null), 3500);
+    };
 
     // Pagination and Filter states
     const [currentPage, setCurrentPage] = useState(1);
@@ -197,7 +206,7 @@ function App() {
 
         if (error) {
             console.error("Error inserting expense:", error);
-            alert("Erro ao salvar despesa. Tente novamente.");
+            showToast('Erro ao salvar despesa. Tente novamente.', 'error');
         } else {
             // Go back to the first page when adding a new expense
             setCurrentPage(1);
@@ -206,6 +215,7 @@ function App() {
             setDesc('')
             setAmount('')
             setReceiptFiles([])
+            showToast(`"${desc}" adicionado com sucesso!`, 'success');
             // Keep category and payer as they were to speed up data entry
         }
     }
@@ -254,17 +264,23 @@ function App() {
 
         if (error) {
             console.error("Error updating:", error);
-            alert("Erro ao atualizar!");
+            showToast('Erro ao atualizar!', 'error');
             return;
         }
 
         setEditingId(null);
         setEditFormData({});
+        showToast('Despesa atualizada!', 'success');
     }
 
     const handleMarkAsPaid = async (id) => {
         const { error } = await supabase.from('expenses').update({ status: 'Pago' }).eq('id', id);
-        if (error) console.error("Error marking as paid:", error);
+        if (error) {
+            console.error("Error marking as paid:", error);
+            showToast('Erro ao marcar como pago.', 'error');
+        } else {
+            showToast('Marcado como pago!', 'success');
+        }
     }
 
     const handleAttachReceipt = async (id, files) => {
@@ -385,9 +401,11 @@ function App() {
 
             if (error) {
                 console.error("Error deleting:", error);
-                alert("Erro ao excluir!");
+                showToast('Erro ao excluir!', 'error');
                 return;
             }
+
+            showToast('Lançamento removido.', 'delete');
 
             // Handle edge case where deleting the last item on a page leaves it empty
             // The realtime listener will update the list, but we manually fix pagination logic
@@ -1339,6 +1357,23 @@ function App() {
                     )}
                 </button>
             </div>
+            {/* TOAST NOTIFICATION */}
+            {toast && (
+                <div className={`toast toast-${toast.type}`} onClick={() => setToast(null)}>
+                    <div className="toast-icon">
+                        {toast.type === 'success' && (
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                        )}
+                        {toast.type === 'error' && (
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                        )}
+                        {toast.type === 'delete' && (
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        )}
+                    </div>
+                    <span className="toast-message">{toast.message}</span>
+                </div>
+            )}
         </div>
     )
 }
