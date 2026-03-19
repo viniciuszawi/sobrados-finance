@@ -568,97 +568,16 @@ function App() {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
     }
 
-    const handleExportCSV = async () => {
-        const escapeCSV = (str) => {
-            if (str === null || str === undefined) return '""';
-            const s = String(str);
-            return `"${s.replace(/"/g, '""')}"`;
-        };
-
-        const headers = ["Data", "Descrição", "Categoria", "Status", "Pagador", "Valor (R$)"];
-        
-        let csvBody = expenses.map(exp => {
-            return [
-                escapeCSV(exp.date),
-                escapeCSV(exp.description),
-                escapeCSV(exp.category),
-                escapeCSV(exp.status || 'Pago'),
-                escapeCSV(exp.payer),
-                escapeCSV(exp.amount.toString().replace('.', ','))
-            ].join(",");
-        }).join("\n");
-
-        // Format summaries
-        const summaryText = [
-            "", 
-            escapeCSV("RESUMO FINANCEIRO") + ",,,,,",
-            `${escapeCSV("Gasto Total da Obra:")},${escapeCSV(formatCurrency(total))},,,,`,
-            `${escapeCSV("Vinícius Pagou:")},${escapeCSV(formatCurrency(totalVinicius))},,,,`,
-            `${escapeCSV("Luiz Pagou:")},${escapeCSV(formatCurrency(totalLuiz))},,,,`,
-            `${escapeCSV("Pagos Juntos (Ambos):")},${escapeCSV(formatCurrency(totalAmbos))},,,,`,
-            "", 
-            escapeCSV("SITUAÇÃO DO ACERTO") + ",,,,,",
-            `${escapeCSV(settlementMsg)},,,,,`
-        ].join("\n");
-
-        const csvContent = headers.map(escapeCSV).join(",") + "\n" + csvBody + "\n" + summaryText;
-
-        // \uFEFF is the BOM for UTF-8 so Excel opens it with correct accents
-        // Removed trailing semicolon from type, as it can cause issues on Android
-        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8' });
-        const fileName = 'sobrados_gastos_completo.csv';
-
-        // Tenta usar o compartilhamento nativo em celulares (muito mais confiável que download direto)
-        if (navigator.share && navigator.canShare) {
-            const file = new File([blob], fileName, { type: 'text/csv' });
-            if (navigator.canShare({ files: [file] })) {
-                try {
-                    await navigator.share({
-                        files: [file],
-                        title: 'Relatório Financeiro Obra',
-                    });
-                    return; // Se funcionou, não precisamos fazer mais nada
-                } catch (error) {
-                    console.error("Falha ao compartilhar ou usuário cancelou:", error);
-                    // Se falhar ou cancelar, continua para o download padrão abaixo
-                }
-            }
-        }
-
-        // Fallback de download padrão (para PC ou casos onde compartilhar falhar)
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', fileName);
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(url), 100);
-    };
-
-    // Filtering Logic
-    const filteredExpenses = expenses.filter(exp => {
-        const matchesSearch = exp.description.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesCategory = filterCategory === '' || exp.category === filterCategory;
-        const expStatus = exp.status || 'Pago';
-        const matchesStatus = filterStatus === '' || expStatus === filterStatus;
-        const expMonth = exp.isoDate.substring(0, 7);
-        const matchesMonth = filterMonth === '' || expMonth === filterMonth;
-
-        return matchesSearch && matchesCategory && matchesStatus && matchesMonth;
-    });
-
-    // Pagination Logic
-    const totalPages = Math.ceil(filteredExpenses.length / ITEMS_PER_PAGE);
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const paginatedExpenses = filteredExpenses.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-
     const handleExportTablePDF = () => {
         const container = document.createElement('div');
         container.style.padding = '20px';
         container.style.fontFamily = 'Inter, sans-serif';
         container.style.color = '#1f2937';
+        // Position off-screen so html2pdf can compute heights correctly without affecting UI
+        container.style.position = 'absolute';
+        container.style.top = '-9999px';
+        container.style.left = '-9999px';
+        container.style.width = '800px';
         
         const title = document.createElement('h2');
         title.innerText = 'Relatório Financeiro da Obra';
@@ -697,12 +616,12 @@ function App() {
         const thead = document.createElement('thead');
         thead.innerHTML = `
             <tr style="background-color: #f3f4f6; text-align: left;">
-                <th style="padding: 6px; border: 1px solid #e5e7eb;">Data</th>
-                <th style="padding: 6px; border: 1px solid #e5e7eb;">Descrição</th>
-                <th style="padding: 6px; border: 1px solid #e5e7eb;">Categoria</th>
-                <th style="padding: 6px; border: 1px solid #e5e7eb;">Status</th>
-                <th style="padding: 6px; border: 1px solid #e5e7eb;">Pagador</th>
-                <th style="padding: 6px; border: 1px solid #e5e7eb; text-align: right;">Valor</th>
+                <th style="padding: 8px; border: 1px solid #e5e7eb;">Data</th>
+                <th style="padding: 8px; border: 1px solid #e5e7eb;">Descrição</th>
+                <th style="padding: 8px; border: 1px solid #e5e7eb;">Categoria</th>
+                <th style="padding: 8px; border: 1px solid #e5e7eb;">Status</th>
+                <th style="padding: 8px; border: 1px solid #e5e7eb;">Pagador</th>
+                <th style="padding: 8px; border: 1px solid #e5e7eb; text-align: right;">Valor</th>
             </tr>
         `;
         table.appendChild(thead);
@@ -711,42 +630,36 @@ function App() {
         filteredExpenses.forEach((exp, i) => {
             const tr = document.createElement('tr');
             tr.style.backgroundColor = i % 2 === 0 ? '#ffffff' : '#f9fafb';
+            tr.style.pageBreakInside = 'avoid'; // Prevent row cut-off between pages
+            
             tr.innerHTML = `
-                <td style="padding: 6px; border: 1px solid #e5e7eb;">${exp.date}</td>
-                <td style="padding: 6px; border: 1px solid #e5e7eb;">${exp.description}</td>
-                <td style="padding: 6px; border: 1px solid #e5e7eb;">${exp.category}</td>
-                <td style="padding: 6px; border: 1px solid #e5e7eb;">${exp.status || 'Pago'}</td>
-                <td style="padding: 6px; border: 1px solid #e5e7eb;">${exp.payer}</td>
-                <td style="padding: 6px; border: 1px solid #e5e7eb; text-align: right;">${formatCurrency(exp.amount)}</td>
+                <td style="padding: 8px; border: 1px solid #e5e7eb;">${exp.date}</td>
+                <td style="padding: 8px; border: 1px solid #e5e7eb;">${exp.description}</td>
+                <td style="padding: 8px; border: 1px solid #e5e7eb;">${exp.category}</td>
+                <td style="padding: 8px; border: 1px solid #e5e7eb;">${exp.status || 'Pago'}</td>
+                <td style="padding: 8px; border: 1px solid #e5e7eb;">${exp.payer}</td>
+                <td style="padding: 8px; border: 1px solid #e5e7eb; text-align: right;">${formatCurrency(exp.amount)}</td>
             `;
             tbody.appendChild(tr);
         });
         table.appendChild(tbody);
         container.appendChild(table);
 
+        document.body.appendChild(container); // Mount to DOM so dimensions are calculated correctly
+
         const opt = {
             margin:       0.5,
             filename:     'relatorio_sobrados_financeiro.pdf',
             image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2 },
+            html2canvas:  { scale: 2, useCORS: true, scrollY: 0 },
             jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
         };
 
-        window.html2pdf().set(opt).from(container).outputPdf('blob').then(async (pdfBlob) => {
-            const file = new File([pdfBlob], 'relatorio_sobrados_financeiro.pdf', { type: 'application/pdf' });
-            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                try {
-                    await navigator.share({
-                        files: [file],
-                        title: 'Relatório Financeiro Obra',
-                    });
-                } catch (e) {
-                    console.log("Compartilhamento cancelado ou falhou", e);
-                    window.html2pdf().set(opt).from(container).save();
-                }
-            } else {
-                window.html2pdf().set(opt).from(container).save();
-            }
+        window.html2pdf().set(opt).from(container).save().then(() => {
+            document.body.removeChild(container); // Cleanup
+        }).catch(err => {
+            console.error("Erro ao gerar PDF:", err);
+            document.body.removeChild(container);
         });
     };
 
@@ -955,24 +868,15 @@ function App() {
                         <option value="A Pagar">A Pagar</option>
                     </select>
 
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <button onClick={handleExportCSV} className="btn-export-icon" title="Baixar relatório em Excel / CSV">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="7 10 12 15 17 10"></polyline>
-                                <line x1="12" y1="15" x2="12" y2="3"></line>
-                            </svg>
-                        </button>
-                        <button onClick={handleExportTablePDF} className="btn-export-icon" title="Baixar relatório em PDF">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
-                                <line x1="16" y1="13" x2="8" y2="13"></line>
-                                <line x1="16" y1="17" x2="8" y2="17"></line>
-                                <polyline points="10 9 9 9 8 9"></polyline>
-                            </svg>
-                        </button>
-                    </div>
+                    <button onClick={handleExportTablePDF} className="btn-export-icon" title="Baixar relatório em PDF">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                    </button>
                 </div>
 
                 {filteredExpenses.length === 0 ? (
