@@ -142,7 +142,7 @@
 }
 
 .settlement-amount {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #d97706;
   line-height: 1.4;
@@ -159,10 +159,10 @@
   border: 1px solid var(--border);
   border-radius: 9999px;
   color: var(--secondary);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
-  padding: 0.35rem 1rem;
+  padding: 0.4rem 1.1rem;
   transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
