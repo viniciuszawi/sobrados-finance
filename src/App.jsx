@@ -568,7 +568,7 @@ function App() {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
     }
 
-    const handleExportCSV = () => {
+    const handleExportCSV = async () => {
         const headers = ["Data", "Descrição", "Categoria", "Status", "Pagador", "Valor (R$)"];
         
         let csvBody = expenses.map(exp => {
@@ -598,14 +598,37 @@ function App() {
         const csvContent = headers.join(";") + "\n" + csvBody + "\n" + summaryText;
 
         // \uFEFF is the BOM for UTF-8 so Excel opens it with correct accents
-        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        // Removed trailing semicolon from type, as it can cause issues on Android
+        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8' });
+        const fileName = 'sobrados_gastos_completo.csv';
+
+        // Tenta usar o compartilhamento nativo em celulares (muito mais confiável que download direto)
+        if (navigator.share && navigator.canShare) {
+            const file = new File([blob], fileName, { type: 'text/csv' });
+            if (navigator.canShare({ files: [file] })) {
+                try {
+                    await navigator.share({
+                        files: [file],
+                        title: 'Relatório Financeiro Obra',
+                    });
+                    return; // Se funcionou, não precisamos fazer mais nada
+                } catch (error) {
+                    console.error("Falha ao compartilhar ou usuário cancelou:", error);
+                    // Se falhar ou cancelar, continua para o download padrão abaixo
+                }
+            }
+        }
+
+        // Fallback de download padrão (para PC ou casos onde compartilhar falhar)
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', 'sobrados_gastos_completo.csv');
+        link.setAttribute('download', fileName);
+        link.style.display = 'none';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 100);
     };
 
     // Filtering Logic
