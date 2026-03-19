@@ -631,56 +631,103 @@ input[type="date"] {
     display: none;
   }
 
-  .expenses-table, .expenses-table tbody, .expenses-table tr, .expenses-table td {
+  .expenses-table, .expenses-table tbody {
     display: block;
     width: 100%;
   }
 
   .expenses-table tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.4rem;
     margin-bottom: 1rem;
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.5rem;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    border-radius: 12px;
+    padding: 1.25rem;
+    background: var(--surface);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   }
-  
+
   .expenses-table tr:hover {
-    background: transparent;
+    background: var(--surface);
   }
 
   .expenses-table td {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    text-align: right;
-    border-bottom: 1px solid rgba(0,0,0,0.04);
-    padding: 0.8rem 0.5rem;
-  }
-
-  .expenses-table td:last-child {
-    border-bottom: none;
-    justify-content: center;
-    padding-top: 1rem;
-  }
-
-  /* Use data-label attribute for the mobile "headers" */
-  .expenses-table td::before {
-    content: attr(data-label);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    font-weight: 700;
+    border: none;
+    padding: 0;
     text-align: left;
-    margin-right: 1rem;
+    height: auto;
   }
-  
-  .text-right, .text-center {
-    text-align: right;
+
+  .expenses-table td::before {
+    display: none;
   }
-  
+
+  /* 1: Data - Top Right */
+  .expenses-table td:nth-child(1) {
+    grid-column: 2 / 3;
+    grid-row: 1;
+    justify-content: flex-end;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  /* 2: Descrição - Top Left */
+  .expenses-table td:nth-child(2) {
+    grid-column: 1 / 2;
+    grid-row: 1;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--secondary);
+  }
+
+  /* 3: Categoria - Below Description */
+  .expenses-table td:nth-child(3) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    margin-bottom: 0.4rem;
+  }
+
+  /* 4: Status - Middle Left */
+  .expenses-table td:nth-child(4) {
+    grid-column: 1 / 2;
+    grid-row: 3;
+  }
+
+  /* 5: Pagador - Middle Right */
+  .expenses-table td:nth-child(5) {
+    grid-column: 2 / 3;
+    grid-row: 3;
+    justify-content: flex-end;
+  }
+
+  /* 6: Valor - Bottom Left (Big) */
+  .expenses-table td:nth-child(6) {
+    grid-column: 1 / 2;
+    grid-row: 4;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--text-main);
+    margin-top: 0.5rem;
+  }
+
+  /* 7: Ações - Bottom Right */
+  .expenses-table td:nth-child(7) {
+    grid-column: 2 / 3;
+    grid-row: 4;
+    justify-content: flex-end;
+    margin-top: 0.5rem;
+  }
+
   .td-actions .actions-flex {
-    width: 100%;
-    justify-content: center;
+    width: auto;
+    justify-content: flex-end;
+  }
+
+  .text-right, .text-center {
+    text-align: left;
   }
 }
 
